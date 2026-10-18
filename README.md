@@ -81,14 +81,14 @@ Sample test output:
 
 ## 📐 Smarter Scheduling
 
-> Fill in once you've implemented scheduling logic.
+All scheduling logic lives in `pawpal_system.py`. Methods are on `PlanSchedule` unless marked `Task`.
 
 | Feature | Method(s) | Notes |
 |---------|-----------|-------|
-| Task sorting | | e.g., by priority, duration |
-| Filtering | | e.g., skip tasks if time runs out |
-| Conflict handling | | e.g., overlapping time slots |
-| Recurring tasks | | e.g., daily vs. weekly |
+| Task sorting | `PlanSchedule.sort_by_time()`; kept sorted on every change by `_rebuild()` | Sorts tasks by start hour, then start minute. The plan is always in time order, so callers can iterate `arrayOfTasks` directly. |
+| Filtering | `PlanSchedule.filter_tasks(status=None, pet_name=None, pets=())` | Takes three optional arguments: a status (`pending`, `incomplete`, or `complete`), a pet name (matched case-insensitively), and `pets`, the owner's list of `Pet` objects used to look up the name. Pass `None` to skip a filter. Results keep time order. |
+| Conflict handling | `PlanSchedule.addTasks()` → `_rebuild()`; `_overlaps()` (module-level); `PlanSchedule.tryAddTask()` | Any two tasks whose times overlap are a conflict, whether they belong to the same pet or different pets, because the owner can only do one thing at a time. When a task is added, the plan rebuilds itself by priority: higher-priority tasks are placed first, and a task is kept only if it doesn't overlap one already kept. Ties go to the shorter task, then the earlier one. A higher-priority task bumps lower ones, which `addTasks()` returns. A losing task raises `ValueError`, and duplicates (same pet, type, and start) are rejected. `tryAddTask()` wraps `addTasks()` and returns warning strings instead of raising. The greedy pass does not always maximize total priority. |
+| Recurring tasks | `Task.setRecurrence(recurrence)`, `Task.setDueDate(date)`, `Task.markTaskComplete()`; `PlanSchedule.markPlanComplete()` | A task is `"daily"` or `"weekly"` (or `None` for a one-off). Completing it returns a new pending copy due 1 or 7 days later, and completing an already-complete task returns `None`. `markPlanComplete()` returns the next occurrences for the caller to add to the later day's plan. |
 
 ## 📸 Demo Walkthrough
 

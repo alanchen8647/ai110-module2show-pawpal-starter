@@ -19,7 +19,8 @@ from __future__ import annotations
 
 import datetime as dt
 import itertools
-from dataclasses import dataclass, field
+from collections.abc import Iterable
+from dataclasses import dataclass, field, replace
 
 MINUTES_PER_DAY = 24 * 60
 MIN_PRIORITY = 1
@@ -32,6 +33,10 @@ STATUS_COMPLETE = "complete"
 PLAN_PLANNED = "planned"
 PLAN_COMPLETE = "complete"
 PLAN_REMOVED = "removed"
+
+RECURRENCE_DAILY = "daily"
+RECURRENCE_WEEKLY = "weekly"
+_RECURRENCE_DAYS = {RECURRENCE_DAILY: 1, RECURRENCE_WEEKLY: 7}
 
 _id_counters = {
     "client": itertools.count(1),
@@ -66,6 +71,20 @@ def _check_hour_minutes(hour: int, minutes: int, label: str) -> None:
     """Raise if hour is not 0-23 or minutes is not 0-59."""
     _check_int(hour, f"{label} hour", 0, 23)
     _check_int(minutes, f"{label} minutes", 0, 59)
+
+
+def _duration_minutes(hour: int, minutes: int) -> int:
+    """Validate a duration given as hours and minutes and return it in minutes (must be > 0)."""
+    _check_hour_minutes(hour, minutes, "duration")
+    total = hour * 60 + minutes
+    if total == 0:
+        raise ValueError("duration must be greater than 0")
+    return total
+
+
+def _overlaps(a: tuple[int, int], b: tuple[int, int]) -> bool:
+    """True if the half-open windows (start, end) `a` and `b` share any time."""
+    return a[0] < b[1] and b[0] < a[1]
 
 
 @dataclass
@@ -224,6 +243,10 @@ class Task:
     timeDurationMinutes: int | None = None
     priority: int | None = None
     ownerPreferences: str | None = None
+    # None for a one-off task, or RECURRENCE_DAILY / RECURRENCE_WEEKLY.
+    recurrence: str | None = None
+    # The day this occurrence is due. Unset means today when the next one is computed.
+    dueDate: dt.date | None = None
 
     def createTasks(self) -> Task:
         """Return a new, unscheduled task with an auto-generated ID."""
@@ -233,9 +256,35 @@ class Task:
         """Set the ID of the pet this task belongs to."""
         self.petId = _check_int(petId, "petId", 1, 10**9)
 
-    def markTaskComplete(self) -> None:
-        """Set the task's status to complete."""
+    def setRecurrence(self, recurrence: str | None) -> None:
+        """Set how often the task repeats: 'daily', 'weekly', or None for a one-off."""
+        if recurrence is not None and recurrence not in _RECURRENCE_DAYS:
+            raise ValueError("recurrence must be 'daily', 'weekly', or None")
+        self.recurrence = recurrence
+
+    def setDueDate(self, date: dt.date) -> None:
+        """Set the day this occurrence is due."""
+        if not isinstance(date, dt.date):
+            raise TypeError("due date must be a datetime.date")
+        self.dueDate = date
+
+    def markTaskComplete(self) -> Task | None:
+        """Set the task's status to complete.
+
+        For a daily or weekly task that was not already complete, returns the next
+        occurrence as a new pending Task, due 1 or 7 days after this one. Otherwise None.
+        """
+        was_complete = self.status == STATUS_COMPLETE
         self.status = STATUS_COMPLETE
+        if was_complete or self.recurrence is None:
+            return None
+        base = self.dueDate or dt.date.today()
+        return replace(
+            self,
+            taskId=_next_id("task"),
+            status=STATUS_PENDING,
+            dueDate=base + dt.timedelta(days=_RECURRENCE_DAYS[self.recurrence]),
+        )
 
     def markIncomplete(self) -> None:
         """Set the task's status to incomplete."""
@@ -263,9 +312,7 @@ class Task:
 
     def setDuration(self, hour: int, minutes: int) -> None:
         """Set the duration as hours and minutes; the total must be greater than 0."""
-        _check_hour_minutes(hour, minutes, "duration")
-        if hour * 60 + minutes == 0:
-            raise ValueError("duration must be greater than 0")
+        _duration_minutes(hour, minutes)
         self.timeDurationHour = hour
         self.timeDurationMinutes = minutes
 
@@ -317,6 +364,9 @@ class PlanSchedule:
     date: dt.date | None = None
     arrayOfTasks: list[Task] = field(default_factory=list)
     status: str | None = None
+    # Every task offered to the plan, keyed by taskId. Tasks bumped by a higher-priority
+    # conflict stay here so they return to the plan when the conflict is removed.
+    _pool: dict[int, Task] = field(default_factory=dict, repr=False, compare=False)
 
     def setPlan(self) -> None:
         """Mark the plan as planned, defaulting the date to today."""
@@ -324,57 +374,163 @@ class PlanSchedule:
             self.date = dt.date.today()
         self.status = PLAN_PLANNED
 
-    def _overlapping(self, start: int, end: int, ignore: Task | None = None) -> bool:
-        """True if [start, end) overlaps any timed task in the plan (except `ignore`)."""
-        for task in self.arrayOfTasks:
-            if task is ignore:
-                continue
-            window = task.timeWindow()
-            if window is None:
-                continue
-            if start < window[1] and window[0] < end:
-                return True
-        return False
+    @staticmethod
+    def _same_slot(a: Task, b: Task) -> bool:
+        """True if `a` and `b` are the same care task: same pet, type, and start time."""
+        return a.petId == b.petId and a.type == b.type and a.startMinutes() == b.startMinutes()
 
     def checkForTimeAvailability(
-        self, startHour: int, startMinutes: int, durationHour: int, durationMinutes: int
-    ) -> bool:
-        """True if a slot starting at the given time with the given duration fits the day."""
-        _check_hour_minutes(startHour, startMinutes, "start")
-        _check_hour_minutes(durationHour, durationMinutes, "duration")
-        duration = durationHour * 60 + durationMinutes
-        if duration == 0:
-            raise ValueError("duration must be greater than 0")
-        start = startHour * 60 + startMinutes
-        end = start + duration
-        if end > MINUTES_PER_DAY:
-            return False
-        return not self._overlapping(start, end)
+        self,
+        durationHour: int,
+        durationMinutes: int,
+        earliestHour: int = 0,
+        earliestMinutes: int = 0,
+    ) -> tuple[int, int] | None:
+        """Find the earliest free gap of the given duration at or after the earliest time.
 
-    def addTasks(self, task: Task) -> None:
-        """Add `task` to the plan. Raises if its time overlaps another task in the plan."""
+        Walks the plan's tasks in start order, moving a cursor past each one. The first
+        gap that is at least `duration` long, from the cursor to the next task's start,
+        is the answer. Returns (hour, minutes) for the gap's start, or None if no gap
+        fits before midnight.
+        """
+        duration = _duration_minutes(durationHour, durationMinutes)
+        _check_hour_minutes(earliestHour, earliestMinutes, "earliest")
+        cursor = earliestHour * 60 + earliestMinutes
+        # arrayOfTasks is kept sorted by start time, so one pass finds the first gap.
+        for task in self.arrayOfTasks:
+            start, end = task.timeWindow()
+            if start - cursor >= duration:
+                break
+            cursor = max(cursor, end)
+        if cursor + duration > MINUTES_PER_DAY:
+            return None
+        return divmod(cursor, 60)
+
+    def sort_by_time(self) -> None:
+        """Sort arrayOfTasks in place by start hour, then start minutes.
+
+        Uses the stored hour and minute fields directly as the sort key. Tasks
+        without a start time sort as None and will fail the comparison, so the
+        plan only holds timed tasks (addTasks enforces this).
+        """
+        self.arrayOfTasks[:] = sorted(
+            self.arrayOfTasks, key=lambda t: (t.timeStartHour, t.timeStartMinutes)
+        )
+
+    def filter_tasks(
+        self,
+        status: str | None = None,
+        pet_name: str | None = None,
+        pets: Iterable[Pet] = (),
+    ) -> list[Task]:
+        """Return plan tasks matching `status` and/or the pet named `pet_name`.
+
+        Pass None to skip a filter. Pet names match without regard to case, and `pets`
+        supplies the petId -> name lookup. Results keep the plan's time order.
+        """
+        if status is not None and status not in (STATUS_PENDING, STATUS_INCOMPLETE, STATUS_COMPLETE):
+            raise ValueError(f"status must be one of pending, incomplete, complete; got {status!r}")
+        pet_ids = None
+        if pet_name is not None:
+            target = pet_name.strip().lower()
+            pet_ids = {p.petId for p in pets if p.petName and p.petName.strip().lower() == target}
+        return [
+            task
+            for task in self.arrayOfTasks
+            if (status is None or task.status == status)
+            and (pet_ids is None or task.petId in pet_ids)
+        ]
+
+    def _rebuild(self) -> None:
+        """Rebuild arrayOfTasks greedily: highest priority first, keeping each task that fits.
+
+        Ties go to the shorter task, then the earlier one. The result is always sorted by start.
+        """
+        def rank(task: Task) -> tuple[int, int, int]:
+            """Sort key for the greedy pass: higher priority first, then shorter, then earlier."""
+            start, end = task.timeWindow()
+            return (-(task.priority or 0), end - start, start)
+
+        selected: list[Task] = []
+        for task in sorted(self._pool.values(), key=rank):
+            if not any(_overlaps(task.timeWindow(), kept.timeWindow()) for kept in selected):
+                selected.append(task)
+        self.arrayOfTasks[:] = selected
+        self.sort_by_time()
+
+    def addTasks(self, task: Task) -> list[Task]:
+        """Offer `task` to the plan and return the tasks it displaced.
+
+        The task goes into the pool, then the whole plan is rebuilt by _rebuild().
+        If the task survives the rebuild, the tasks that dropped out are returned as
+        displaced. If it does not survive, it is removed from the pool, the plan is
+        rebuilt again to its previous state, and ValueError is raised.
+
+        Raises TypeError if `task` is not a Task. Raises ValueError if the task has
+        no full time window, duplicates a task already offered (same pet, type, and
+        start), or loses to higher-priority tasks it overlaps.
+        """
         if not isinstance(task, Task):
             raise TypeError("task must be a Task")
-        if any(t is task for t in self.arrayOfTasks):
-            return
-        window = task.timeWindow()
-        if window is not None and self._overlapping(window[0], window[1], ignore=task):
-            raise ValueError(f"task {task.taskId} overlaps another task in this plan")
-        self.arrayOfTasks.append(task)
+        if self._pool.get(task.taskId) is task:
+            return []
+        if task.timeWindow() is None:
+            raise ValueError(f"task {task.taskId} needs a start time and a duration or end time")
+        if any(self._same_slot(task, other) for other in self._pool.values()):
+            raise ValueError(f"task {task.taskId} duplicates an existing task for this pet")
+
+        before = list(self.arrayOfTasks)
+        self._pool[task.taskId] = task
+        self._rebuild()
+        kept = {id(t) for t in self.arrayOfTasks}
+        if id(task) not in kept:
+            # Rebuilding without the task restores the previous plan exactly.
+            del self._pool[task.taskId]
+            self._rebuild()
+            raise ValueError(f"task {task.taskId} conflicts with higher-priority tasks in this plan")
+        return [t for t in before if id(t) not in kept]
+
+    def tryAddTask(self, task: Task) -> list[str]:
+        """Offer `task` to the plan without raising on a conflict or duplicate.
+
+        A wrapper around addTasks() that turns its ValueError into a message.
+        Returns warning messages: empty if the task was added cleanly, one
+        "Not scheduled:" message if it was rejected, and one "Bumped" message per
+        task it displaced. A TypeError from a non-Task argument still propagates.
+        """
+        try:
+            displaced = self.addTasks(task)
+        except ValueError as err:
+            return [f"Not scheduled: {err}"]
+        return [
+            f"Bumped by higher priority: {t.type} (task {t.taskId})" for t in displaced
+        ]
 
     def removeTasks(self, taskId: int) -> None:
-        """Remove the task with `taskId` from the plan."""
-        for index, task in enumerate(self.arrayOfTasks):
-            if task.taskId == taskId:
-                del self.arrayOfTasks[index]
-                return
-        raise ValueError(f"task {taskId} is not in this plan")
+        """Remove the task with `taskId` from the plan, letting any bumped tasks return.
 
-    def markPlanComplete(self) -> None:
-        """Mark every task in the plan complete and the plan itself complete."""
+        Deletes the task from the pool and rebuilds the plan, so any task it had
+        displaced is reconsidered and may return. Raises ValueError if the task is
+        not in the pool.
+        """
+        if taskId not in self._pool:
+            raise ValueError(f"task {taskId} is not in this plan")
+        del self._pool[taskId]
+        self._rebuild()
+
+    def markPlanComplete(self) -> list[Task]:
+        """Mark every task in the plan complete and the plan itself complete.
+
+        Returns the next occurrences of any daily or weekly tasks. They are not added
+        to this plan, because they belong to a later date's plan.
+        """
+        next_occurrences = []
         for task in self.arrayOfTasks:
-            task.markTaskComplete()
+            following = task.markTaskComplete()
+            if following is not None:
+                next_occurrences.append(following)
         self.status = PLAN_COMPLETE
+        return next_occurrences
 
     def checkForCompletion(self) -> bool:
         """True if the plan has tasks and all of them are complete."""
@@ -385,4 +541,5 @@ class PlanSchedule:
     def removePlan(self) -> None:
         """Clear the plan's tasks and mark it removed. The tasks themselves are kept."""
         self.arrayOfTasks.clear()
+        self._pool.clear()
         self.status = PLAN_REMOVED

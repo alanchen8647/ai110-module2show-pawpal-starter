@@ -47,8 +47,7 @@ Today's Schedule (2026-10-18) for Alex
 
 **b. Tradeoffs**
 
-- Describe one tradeoff your scheduler makes.
-- Why is that tradeoff reasonable for this scenario?
+- The Plan Schedule picks its tasks using the classic greedy algorithm; that algorithm is fast and simple but doesn't guarantee the most greedy result. For example, sometimes it would choose the tasks with priority 5 when it could have chosen the other 2 tasks with priority 4 in the same slot. But I still decided to keep this procedure because it follows the real-life business operation, which when a tasks has higher priority it should be execute a head of all other tasks. 
 
 ---
 

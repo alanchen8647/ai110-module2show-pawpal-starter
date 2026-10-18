@@ -1,5 +1,7 @@
 """Terminal demo: build an owner, two pets, and a day's tasks, then print the schedule."""
 
+import datetime as dt
+
 from pawpal_system import PetOwner, Pet, Task, PlanSchedule
 
 
@@ -36,7 +38,7 @@ def print_schedule(owner, plan):
 
     print(f"Today's Schedule ({plan.date}) for {owner.name}")
     print("-" * 60)
-    for task in sorted(plan.arrayOfTasks, key=lambda t: t.startMinutes()):
+    for task in plan.arrayOfTasks:
         start, end = task.timeWindow()
         pet = pets_by_id[task.petId]
         print(f"{format_minutes(start)}-{format_minutes(end)}  {pet.petName:<8} {task.type:<10} priority {task.priority}")
@@ -56,19 +58,54 @@ def main():
     owner.addPet(dog)
     owner.addPet(cat)
 
-    tasks = [
-        make_task(dog, "walk", (7, 30), (0, 30), 5, "Use the red leash"),
-        make_task(dog, "feeding", (8, 0), (0, 15), 5, "Half cup of kibble"),
-        make_task(cat, "medication", (12, 0), (0, 5), 5, "Give with a treat"),
-        make_task(cat, "grooming", (18, 0), (0, 20), 2),
-    ]
-
+    # Added out of time order on purpose: the plan keeps itself sorted on insert.
     plan = PlanSchedule()
     plan.setPlan()
-    for task in tasks:
-        plan.addTasks(task)
+    plan.addTasks(make_task(cat, "grooming", (18, 0), (0, 20), 2))
+    walk = make_task(dog, "walk", (7, 30), (0, 30), 5, "Use the red leash")
+    walk.setRecurrence("daily")
+    walk.setDueDate(plan.date)
+    plan.addTasks(walk)
+    plan.addTasks(make_task(cat, "medication", (12, 0), (0, 5), 5, "Give with a treat"))
+    plan.addTasks(make_task(dog, "feeding", (8, 0), (0, 15), 5, "Half cup of kibble"))
 
+    # A conflicting task produces a warning instead of stopping the program.
+    for warning in plan.tryAddTask(make_task(cat, "bath", (12, 2), (0, 10), 3)):
+        print(f"Warning: {warning}")
+
+    # Two tasks for different pets at the same time: equal priority, so the shorter one keeps the slot.
+    print("Adding two tasks at 15:00:")
+    for pet, ttype, duration in ((dog, "bath", (0, 30)), (cat, "play", (0, 20))):
+        for warning in plan.tryAddTask(make_task(pet, ttype, (15, 0), duration, 4)):
+            print(f"Warning: {warning}")
+
+    # Mark the walk done so the status filter has something to separate.
+    # The daily walk returns its next occurrence, which goes into tomorrow's plan.
+    following = walk.markTaskComplete()
+    tomorrow = PlanSchedule()
+    tomorrow.date = plan.date + dt.timedelta(days=1)
+    tomorrow.setPlan()
+    tomorrow.addTasks(following)
+
+    print("Schedule (sorted by time):")
+    plan.sort_by_time()
     print_schedule(owner, plan)
+
+    print("\nCompleted tasks:")
+    for task in plan.filter_tasks(status="complete"):
+        print(f"  {format_minutes(task.startMinutes())} {task.type} ({task.status})")
+
+    print("\nPending tasks for Rex:")
+    for task in plan.filter_tasks(status="pending", pet_name="Rex", pets=owner.pets):
+        print(f"  {format_minutes(task.startMinutes())} {task.type}")
+
+    print("\nTasks for Miso (any status):")
+    for task in plan.filter_tasks(pet_name="miso", pets=owner.pets):
+        print(f"  {format_minutes(task.startMinutes())} {task.type} ({task.status})")
+
+    print(f"\nNext occurrence of the daily walk, due {following.dueDate}:")
+    print(f"  {format_minutes(following.startMinutes())} {following.type} ({following.status}, {following.recurrence})")
+    print(f"Tomorrow's plan ({tomorrow.date}) has {len(tomorrow.arrayOfTasks)} task(s).")
 
 
 if __name__ == "__main__":

@@ -74,8 +74,8 @@ classDiagram
         +List~Task~ arrayOfTasks
         +string status
         +setPlan() void
-        +checkForTimeAvailability(startHour, startMinutes, durationHour, durationMinutes) bool
-        +addTasks(task) void
+        +checkForTimeAvailability(durationHour, durationMinutes, earliestHour, earliestMinutes) tuple
+        +addTasks(task) List~Task~
         +removeTasks(taskId) void
         +markPlanComplete() void
         +checkForCompletion() bool

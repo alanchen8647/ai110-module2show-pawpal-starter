@@ -19,9 +19,23 @@
 
 **b. Design changes**
 
-- Did your design change during implementation?
-- If yes, describe at least one change and why you made it.
+* I made change on the design mainly on the formating of the attribute, my Ai assistant told me that I need to pay extra attention on how I set up the time for each of the tasks, simply one attribute for startTime/endTime is not enoguh I need also to take account on the minutes, and actual duration to be able to detect conflict when putting them in a plan. It also pointed out removing unnecessary attributes when it's within reach to trace, such as removing owner_id in tasks since it's traceable in pet's attribute. I also added a list of pets to the PetOwner class to create a two-way link, making it easier to trace pets under a single owner. 
 
+* for other small issue, I renamed a few method that shares similar name.
+
+**Sample Output**
+```
+Today's Schedule (2026-10-18) for Alex
+------------------------------------------------------------
+07:30-08:00  Rex      walk       priority 5
+                   note: Use the red leash
+08:00-08:15  Rex      feeding    priority 5
+                   note: Half cup of kibble
+12:00-12:05  Miso     medication priority 5
+                   note: Give with a treat
+18:00-18:20  Miso     grooming   priority 2
+------------------------------------------------------------
+```
 ---
 
 ## 2. Scheduling Logic and Tradeoffs
@@ -42,13 +56,12 @@
 
 **a. How you used AI**
 
-- How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
-- What kinds of prompts or questions were most helpful?
+- I used Claude Code for debugging and refactoring the current existing structure that I first came up, the most common and important usage is asking Claude to identify missinng relationship and logic bottlenect that might leads to complicated issue when implementation. 
+- I basically asked Claude Code to play the role as my developer buddy, discuss with me on what part of the code in your aspect are unclear or can be improved. I will read through its suggestions and give it my opinion on why I set it up that way. On important issue that it did point out, I discussed on it how I want it to fix the problem, and asked it to double-check the achievability of the solution. On the area that I wasn’t clear on, I asked it to come up with how it would fix the problem. 
 
 **b. Judgment and verification**
 
-- Describe one moment where you did not accept an AI suggestion as-is.
-- How did you evaluate or verify what the AI suggested?
+- Claude did point out some severe issues that I didn’t consider in the initial design, such as the missing precision in time measurement (hour instead of hour+minutes) that might lead to difficulty when ordering tasks for a daily plan. But then there are also areas in which AI points out a complicating issue, such as adding an extra layer of class called Store and move factory method into that new class. That would increase the complexity of the project setup from 4 classes to 5 classes, and it involves an area beyond my knowledge. I asked AI if this is a critical issue to determine the importance of this improvement, and decided to skip it after it replied that this is a readability issue.
 
 ---
 

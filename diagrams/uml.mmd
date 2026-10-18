@@ -1,17 +1,22 @@
 classDiagram
     %% PawPal+ class diagram: owner, pet, task, and daily plan.
-    %% Attribute and method names follow the design spec; types are inferred.
+    %% IDs are auto-generated. Pet/owner links are kept in sync on both sides.
+    %% Owner is reached from a Task through its Pet (Task.petId -> Pet.owner).
+    %% Times are stored as hour/minute parts; duration is hour/minute parts too.
 
     class PetOwner {
         +int clientId
         +string name
         +string email
         +string phone
+        +List~Pet~ pets
         +addClient(client) void
         +setName(name) void
         +setEmail(email) void
         +setPhone(phone) void
         +removeClient(clientId) void
+        +addPet(pet) void
+        +removePet(petId) void
     }
 
     class Pet {
@@ -21,8 +26,10 @@ classDiagram
         +string breed
         +int age
         +int ownerId
+        +PetOwner owner
         +string gender
         +string animalCategory
+        +List~Task~ tasks
         +createPet() Pet
         +setName(name) void
         +setSpecies(species) void
@@ -31,27 +38,32 @@ classDiagram
         +setOwnerId(ownerId) void
         +setGender(gender) void
         +setAnimalCategory(category) void
+        +removePet() void
+        +addTask(task) void
     }
 
     class Task {
         +int taskId
         +int petId
-        +int ownerId
         +string status
         +string type
-        +datetime time
-        +time timeStart
-        +time timeEnd
+        +int timeStartHour
+        +int timeStartMinutes
+        +int timeEndHour
+        +int timeEndMinutes
+        +int timeDurationHour
+        +int timeDurationMinutes
         +int priority
         +string ownerPreferences
         +createTasks() Task
         +setPet(petId) void
-        +setOwner(ownerId) void
-        +markComplete() void
+        +markTaskComplete() void
         +markIncomplete() void
         +markPending() void
         +setType(type) void
-        +setTime(time) void
+        +setTimeStart(hour, minutes) void
+        +setTimeEnd(hour, minutes) void
+        +setDuration(hour, minutes) void
         +setPriority(priority) void
         +setOwnerPreferences(preferences) void
     }
@@ -62,15 +74,15 @@ classDiagram
         +List~Task~ arrayOfTasks
         +string status
         +setPlan() void
-        +checkForTimeAvailability(start, end) bool
+        +checkForTimeAvailability(startHour, startMinutes, durationHour, durationMinutes) bool
         +addTasks(task) void
         +removeTasks(taskId) void
-        +markComplete() void
+        +markPlanComplete() void
         +checkForCompletion() bool
         +removePlan() void
     }
 
-    PetOwner "1" --> "0..*" Pet : owns
-    PetOwner "1" --> "0..*" Task : ownerId
-    Pet "1" --> "0..*" Task : petId
+    PetOwner "1" *-- "0..*" Pet : pets
+    Pet "0..*" --> "0..1" PetOwner : owner
+    Pet "1" *-- "0..*" Task : tasks (petId)
     PlanSchedule "1" o-- "0..*" Task : arrayOfTasks

@@ -47,12 +47,21 @@ pip install -r requirements.txt
 Paste a sample of your app's CLI or Streamlit output here so a reader can see what a generated plan looks like:
 
 ```
-# e.g.:
-# Daily plan for Biscuit (Golden Retriever):
-#   08:00 — Morning walk (30 min) [priority: high]
-#   09:00 — Feeding (10 min) [priority: high]
-#   ...
+Today's Schedule (2026-10-18) for Alex
+------------------------------------------------------------
+07:30-08:00  Rex      walk       priority 5
+                   note: Use the red leash
+08:00-08:15  Rex      feeding    priority 5
+                   note: Half cup of kibble
+12:00-12:05  Miso     medication priority 5
+                   note: Give with a treat
+18:00-18:20  Miso     grooming   priority 2
+------------------------------------------------------------
 ```
+
+## Implementation Summary
+
+* The app is built around 4 major classes: PetOwner, Pet, Task, and PlanSchedule. Each holds specific details about the client, pet, daily task, and daily plan. The classes are related the way real-world pet care is: creating an owner, adding pets, and adding tasks builds the ownership tree. PlanSchedule holds a collection of tasks for one day and rejects any task whose time overlaps one already in the plan. Priority (1–5) is stored on each task and shown in the schedule, but PlanSchedule does not yet use it to order or select tasks.
 
 ## 🧪 Testing PawPal+
 

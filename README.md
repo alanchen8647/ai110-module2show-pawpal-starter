@@ -65,18 +65,21 @@ Today's Schedule (2026-10-18) for Alex
 
 ## 🧪 Testing PawPal+
 
-```bash
-# Run the full test suite:
-pytest
-
-# Run with coverage:
-pytest --cov
-```
+```python -m pytest```
 
 Sample test output:
 
+Output:
 ```
-# Paste your pytest output here
+============================================================================ test session starts ============================================================================
+platform win32 -- Python 3.12.1, pytest-9.1.1, pluggy-1.6.0
+rootdir: D:\CodePath\Week3\ai110-module2show-pawpal-starter\tests
+plugins: anyio-4.15.1
+collected 32 items                                                                                                                                                           
+
+test_pawpal.py ................................                                                                                                                        [100%]
+
+============================================================================ 32 passed in 0.07s =============================================================================
 ```
 
 ## 📐 Smarter Scheduling
@@ -90,14 +93,16 @@ All scheduling logic lives in `pawpal_system.py`. Methods are on `PlanSchedule` 
 | Conflict handling | `PlanSchedule.addTasks()` → `_rebuild()`; `_overlaps()` (module-level); `PlanSchedule.tryAddTask()` | Any two tasks whose times overlap are a conflict, whether they belong to the same pet or different pets, because the owner can only do one thing at a time. When a task is added, the plan rebuilds itself by priority: higher-priority tasks are placed first, and a task is kept only if it doesn't overlap one already kept. Ties go to the shorter task, then the earlier one. A higher-priority task bumps lower ones, which `addTasks()` returns. A losing task raises `ValueError`, and duplicates (same pet, type, and start) are rejected. `tryAddTask()` wraps `addTasks()` and returns warning strings instead of raising. The greedy pass does not always maximize total priority. |
 | Recurring tasks | `Task.setRecurrence(recurrence)`, `Task.setDueDate(date)`, `Task.markTaskComplete()`; `PlanSchedule.markPlanComplete()` | A task is `"daily"` or `"weekly"` (or `None` for a one-off). Completing it returns a new pending copy due 1 or 7 days later, and completing an already-complete task returns `None`. `markPlanComplete()` returns the next occurrences for the caller to add to the later day's plan. |
 
-## 📸 Demo Walkthrough
+## Demo Walkthrough
 
 Describe your app in numbered steps so a reader can follow along without watching a video:
 
-1. <!-- Describe this step -->
-2. <!-- Describe this step -->
-3. <!-- Describe this step -->
-4. <!-- Describe this step -->
-5. <!-- Add more steps as needed -->
+1. Add a pet owner with their information, which is name, email, and phone as their contact information. 
+
+2. Add a pet with its information. First, select which pet owner the pet belongs to, then it's name, species, breed(optional), age, and gender, along with pet category of the pet (e.g. mammal).
+
+3. Select a specific pet to create a task, given the type (e.g. Walk), start time, duration, and priority. Owner note is optional; some pet owners might have special need when performing daily task.
+
+4. Once the task is created, it will automatically check if this task can fit into the current schedule; if yes, it will automatically be added to the schedule; if no, it will be moved to unscheduled tasks with a given reason why it doesn't fit. If in the current schedule, there is a slot where the current high-priority task can fit by replacing a task with lower priority, the program will do so. 
 
 **Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->

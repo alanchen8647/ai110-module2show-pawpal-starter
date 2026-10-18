@@ -247,6 +247,9 @@ class Task:
     recurrence: str | None = None
     # The day this occurrence is due. Unset means today when the next one is computed.
     dueDate: dt.date | None = None
+    # Set once this task has spawned its next occurrence. Stops a reopened and
+    # re-completed task from spawning a second one.
+    _nextSpawned: bool = field(default=False, repr=False, compare=False)
 
     def createTasks(self) -> Task:
         """Return a new, unscheduled task with an auto-generated ID."""
@@ -276,15 +279,18 @@ class Task:
         """
         was_complete = self.status == STATUS_COMPLETE
         self.status = STATUS_COMPLETE
-        if was_complete or self.recurrence is None:
+        if was_complete or self._nextSpawned or self.recurrence is None:
             return None
         base = self.dueDate or dt.date.today()
-        return replace(
+        following = replace(
             self,
             taskId=_next_id("task"),
             status=STATUS_PENDING,
             dueDate=base + dt.timedelta(days=_RECURRENCE_DAYS[self.recurrence]),
+            _nextSpawned=False,
         )
+        self._nextSpawned = True
+        return following
 
     def markIncomplete(self) -> None:
         """Set the task's status to incomplete."""

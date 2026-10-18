@@ -68,13 +68,33 @@ Today's Schedule (2026-10-18) for Alex
 
 **a. What you tested**
 
-- What behaviors did you test?
-- Why were these tests important?
+This runs tests on:
+* Sorting in chronological order
+* Sorting keeps the original order with same start time
+* Sorting in time order
+* Recurrence set up for completing daily task
+* Recurrence set up for completing weekly task
+* handling leap day 
+* one time task does not create next courrance
+* Completing a recurring task twice creates only one next occurrence
+* Reopening and re-completing doesn't duplicate
+* recurring task with no due date, counts the day it wasa completed
+* invalid recurrence values will be rejected
+* Completing plan returns next occurrences for recurring tasks only
+* adding a task with same pet, type, and start time raises an error
+* Two pets with same start time falg as conflict
+* Back-to-Back tasks don't conflict
+* Higher priority task bumps an overlapping lower-priority one
+* lower prioirty task that overlaps a higher one is rejected
+* bumping works as a chain, and the greedy rebuild keeps the higher priority tasks.
+* untimed task will be rejected
+* Finding a free time gap returns the earliest fit
+* Filtering by status or pet name works, and invalid status will be reject.
 
 **b. Confidence**
 
-- How confident are you that your scheduler works correctly?
-- What edge cases would you test next if you had more time?
+Conflident: 4/5 stars
+
 
 ---
 
@@ -82,12 +102,11 @@ Today's Schedule (2026-10-18) for Alex
 
 **a. What went well**
 
-- What part of this project are you most satisfied with?
+- Setting up the greedy algorithm is the part that I spent the most time on, deciding what approach the algorithm can take to achieve a better schedule following real-life operational logic. I also have a deep conversation with AI about areas for improvement, solution achivability, and if it's necessary to solve a complicated problem or leave it for the future.
 
 **b. What you would improve**
 
-- If you had another iteration, what would you improve or redesign?
+- I checked the UI and the actual program use case at the last step; that's where I find out that I missed out an important part of the project: that it remembers the tasks for unselected. As for now if user trying to add a task that doesn't fit in to current schedule, the program will completely reject this tasks as it has conflict with current schedule. But in real-life operaiton, it should of keep that tasks on schedule, and wait for an chance to fit that tasks in future schedule. If I have a chance in the future, I will first check the UI and consider the user interaction while brainstorming the structure.
 
 **c. Key takeaway**
-
-- What is one important thing you learned about designing systems or working with AI on this project?
+- It's really important to make a precise plan at the beginning. It will make everything complicated if a potential bug or logic bottleneck is found out at the last moment of the project, which it might require a rework that will trace down to the original UML design of the project. 

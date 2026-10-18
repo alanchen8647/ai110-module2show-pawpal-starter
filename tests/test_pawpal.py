@@ -261,3 +261,125 @@ def test_adding_task_increases_pet_task_count():
 
     assert len(pet.tasks) == before + 1
     assert task.petId == pet.petId
+
+
+# --- Sorting correctness -------------------------------------------------------
+
+
+def test_tasks_are_returned_in_chronological_order():
+    plan = PlanSchedule()
+    # Offered out of order, including two tasks in the same hour.
+    offered = [
+        make_task((18, 0), (0, 20), task_type="grooming", pet_id=1),
+        make_task((7, 45), (0, 15), task_type="feeding", pet_id=2),
+        make_task((7, 5), (0, 10), task_type="walk", pet_id=3),
+        make_task((12, 30), (0, 15), task_type="medication", pet_id=1),
+    ]
+    for task in offered:
+        plan.addTasks(task)
+
+    starts = [t.startMinutes() for t in plan.arrayOfTasks]
+    assert starts == [7 * 60 + 5, 7 * 60 + 45, 12 * 60 + 30, 18 * 60]
+    # The filtered view keeps the same chronological order.
+    pending = plan.filter_tasks(status=STATUS_PENDING)
+    assert [t.startMinutes() for t in pending] == starts
+
+
+def test_sort_by_time_is_stable_for_equal_start_times():
+    plan = PlanSchedule()
+    first = make_task((9, 0), (0, 10), priority=5, pet_id=1)
+    second = make_task((9, 0), (0, 10), priority=5, pet_id=2, task_type="feeding")
+    plan.arrayOfTasks.extend([first, second])
+    plan.sort_by_time()
+    assert plan.arrayOfTasks == [first, second]
+
+
+# --- Recurrence logic ----------------------------------------------------------
+
+
+def test_completing_daily_task_creates_task_for_following_day():
+    plan = PlanSchedule()
+    walk = make_task((7, 30), (0, 30), pet_id=1)
+    walk.setRecurrence("daily")
+    walk.setDueDate(dt.date(2026, 10, 18))
+    plan.addTasks(walk)
+
+    next_day = plan.markPlanComplete()
+
+    assert walk.status == STATUS_COMPLETE
+    assert len(next_day) == 1
+    following = next_day[0]
+    assert following.dueDate == dt.date(2026, 10, 19)
+    assert following.status == STATUS_PENDING
+    assert following.petId == walk.petId
+    assert following.type == walk.type
+    assert following.startMinutes() == walk.startMinutes()
+    # The next-day task is not put into today's plan.
+    assert following not in plan.arrayOfTasks
+
+
+def test_weekly_recurrence_crosses_year_boundary():
+    bath = make_task((10, 0), (0, 45), task_type="bath", pet_id=1)
+    bath.setRecurrence("weekly")
+    bath.setDueDate(dt.date(2026, 12, 28))
+
+    assert bath.markTaskComplete().dueDate == dt.date(2027, 1, 4)
+
+
+def test_daily_recurrence_crosses_leap_day():
+    walk = make_task((7, 30), (0, 30), pet_id=1)
+    walk.setRecurrence("daily")
+    walk.setDueDate(dt.date(2028, 2, 28))
+
+    assert walk.markTaskComplete().dueDate == dt.date(2028, 2, 29)
+
+
+def test_reopened_recurring_task_does_not_duplicate_next_occurrence():
+    walk = make_task((7, 30), (0, 30), pet_id=1)
+    walk.setRecurrence("daily")
+    walk.setDueDate(dt.date(2026, 10, 18))
+
+    assert walk.markTaskComplete() is not None
+    walk.markIncomplete()
+    assert walk.markTaskComplete() is None
+
+
+# --- Conflict detection --------------------------------------------------------
+
+
+def test_duplicate_times_are_flagged_by_add_tasks():
+    plan = PlanSchedule()
+    plan.addTasks(make_task((7, 30), (0, 30), pet_id=1))
+    duplicate = make_task((7, 30), (0, 30), pet_id=1)
+
+    with pytest.raises(ValueError, match="duplicates"):
+        plan.addTasks(duplicate)
+    assert len(plan.arrayOfTasks) == 1
+
+
+def test_duplicate_times_are_reported_as_warning_by_try_add_task():
+    plan = PlanSchedule()
+    plan.tryAddTask(make_task((7, 30), (0, 30), pet_id=1))
+
+    warnings = plan.tryAddTask(make_task((7, 30), (0, 30), pet_id=1))
+
+    assert len(warnings) == 1
+    assert warnings[0].startswith("Not scheduled:")
+    assert "duplicates" in warnings[0]
+
+
+def test_same_start_for_different_pets_is_flagged_as_conflict():
+    plan = PlanSchedule()
+    plan.addTasks(make_task((7, 30), (0, 30), priority=4, pet_id=1))
+
+    warnings = plan.tryAddTask(make_task((7, 30), (0, 30), priority=2, pet_id=2))
+
+    assert len(warnings) == 1 and warnings[0].startswith("Not scheduled:")
+
+
+def test_back_to_back_tasks_do_not_conflict():
+    plan = PlanSchedule()
+    plan.addTasks(make_task((9, 0), (0, 30), pet_id=1))
+
+    assert plan.tryAddTask(make_task((9, 30), (0, 30), pet_id=2)) == []
+    assert [t.startMinutes() for t in plan.arrayOfTasks] == [9 * 60, 9 * 60 + 30]

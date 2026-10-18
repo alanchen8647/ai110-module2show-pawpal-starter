@@ -4,8 +4,18 @@
 
 **a. Initial design**
 
-- Briefly describe your initial UML design.
-- What classes did you include, and what responsibilities did you assign to each?
+* The system will have multiple classes including, pet, pet tasks, pet owner, plan schedule. 
+
+* Pet class will contain information of a individual pet, inclduing their pet id, name, breed, age, and client id of the pet owner that owns this pet.
+
+* Pet-Owner class will contain informaiton of a invidual pet-owner/client, information include name, gender, client id. 
+
+* Pet tasks class will contain information of a single pet care tasks, it would contain the information of it's own task id, the pet & owner id of the task owner pet, status of the complation of this task, task type (etc: walks), area this task will be performed, estimated time duration of this task will take, priority of the tasks, and any owner preferences for this given tasks. 
+
+* Plan schedule tasks will contain information of a built plan for a day, each item in this class is a full day schedule of pet care tasks. This class will include a schedule ID, date, schedule status, and a set of tasks in order of priority and time range. 
+
+* The 3 main core actions will be add pet, add pet tasks, and create plan with tasks.
+
 
 **b. Design changes**
 

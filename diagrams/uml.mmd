@@ -1,15 +1,76 @@
 classDiagram
-    %% Replace the placeholders below with your actual classes, attributes, methods, and relationships.
-    %% Keep this file updated so it matches your final implementation.
+    %% PawPal+ class diagram: owner, pet, task, and daily plan.
+    %% Attribute and method names follow the design spec; types are inferred.
 
-    class ClassName {
-        +type attribute
-        +method() returnType
+    class PetOwner {
+        +int clientId
+        +string name
+        +string email
+        +string phone
+        +addClient(client) void
+        +setName(name) void
+        +setEmail(email) void
+        +setPhone(phone) void
+        +removeClient(clientId) void
     }
 
-    class AnotherClass {
-        +type attribute
-        +method() returnType
+    class Pet {
+        +int petId
+        +string petName
+        +string petSpecies
+        +string breed
+        +int age
+        +int ownerId
+        +string gender
+        +string animalCategory
+        +createPet() Pet
+        +setName(name) void
+        +setSpecies(species) void
+        +setBreed(breed) void
+        +setAge(age) void
+        +setOwnerId(ownerId) void
+        +setGender(gender) void
+        +setAnimalCategory(category) void
     }
 
-    ClassName --> AnotherClass : relationship
+    class Task {
+        +int taskId
+        +int petId
+        +int ownerId
+        +string status
+        +string type
+        +datetime time
+        +time timeStart
+        +time timeEnd
+        +int priority
+        +string ownerPreferences
+        +createTasks() Task
+        +setPet(petId) void
+        +setOwner(ownerId) void
+        +markComplete() void
+        +markIncomplete() void
+        +markPending() void
+        +setType(type) void
+        +setTime(time) void
+        +setPriority(priority) void
+        +setOwnerPreferences(preferences) void
+    }
+
+    class PlanSchedule {
+        +int planId
+        +date date
+        +List~Task~ arrayOfTasks
+        +string status
+        +setPlan() void
+        +checkForTimeAvailability(start, end) bool
+        +addTasks(task) void
+        +removeTasks(taskId) void
+        +markComplete() void
+        +checkForCompletion() bool
+        +removePlan() void
+    }
+
+    PetOwner "1" --> "0..*" Pet : owns
+    PetOwner "1" --> "0..*" Task : ownerId
+    Pet "1" --> "0..*" Task : petId
+    PlanSchedule "1" o-- "0..*" Task : arrayOfTasks
